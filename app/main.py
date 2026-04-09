@@ -201,17 +201,43 @@ class ReadingInboxApp:
 
         cfg = self.settings.app.telegram
         interval = cfg.polling_interval_seconds
+        status_interval = max(60, cfg.status_log_interval_seconds)
 
         last_update_id: int | None = None
+        next_heartbeat_at = time.monotonic() + status_interval
+
         while True:
             try:
                 updates = self.telegram.poll_updates(offset=last_update_id, timeout=20)
+                processed_count = 0
+
                 for update in updates:
                     last_update_id = update.update_id + 1
                     msg = update.message
                     if not self._is_allowed_chat(msg.chat_id):
                         continue
                     self.process_message(msg.chat_id, msg.message_id, msg.text)
+                    processed_count += 1
+
+                if processed_count > 0:
+                    logger.info(
+                        "processed telegram updates",
+                        extra={"extra": {"processed_count": processed_count}},
+                    )
+
+                now = time.monotonic()
+                if now >= next_heartbeat_at:
+                    logger.info(
+                        "polling alive",
+                        extra={
+                            "extra": {
+                                "status": "alive",
+                                "interval_seconds": interval,
+                                "status_log_interval_seconds": status_interval,
+                            }
+                        },
+                    )
+                    next_heartbeat_at = now + status_interval
             except Exception:  # noqa: BLE001
                 logger.exception("polling loop error")
             time.sleep(interval)

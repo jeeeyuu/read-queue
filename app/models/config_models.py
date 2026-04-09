@@ -10,6 +10,7 @@ class TelegramConfig(BaseModel):
 
     mode: str = "polling"
     polling_interval_seconds: int = 3
+    status_log_interval_seconds: int = 600
     allowed_chat_ids: list[int] = Field(default_factory=list)
 
 

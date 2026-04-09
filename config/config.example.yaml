@@ -5,6 +5,7 @@ log_level: "INFO"
 telegram:
   mode: "polling"
   polling_interval_seconds: 3
+  status_log_interval_seconds: 600
   allowed_chat_ids: []
 
 openai:

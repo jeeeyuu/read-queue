@@ -77,12 +77,19 @@ This repository already excludes it in `.gitignore`.
 2. Get the bot token and set it in `config/secrets.yaml`.
 3. Start a chat with your bot.
 4. Optionally set `telegram.allowed_chat_ids` to restrict accepted chats.
+5. Tune polling log frequency in `config/config.yaml`:
+   - `telegram.polling_interval_seconds`: poll cycle interval
+   - `telegram.status_log_interval_seconds`: heartbeat log interval (default: 600 seconds)
+
 
 ## 9. Running the app
 Run polling mode:
 ```bash
 python scripts/run_polling.py
 ```
+
+By default, polling status is quiet and only emits a periodic "polling alive" heartbeat (every 600 seconds).
+Adjust `telegram.status_log_interval_seconds` in `config/config.yaml` if you want it more or less frequent.
 
 Expected behavior when sending a message with one or more links:
 1. URLs are extracted and normalized.
@@ -101,6 +108,8 @@ Expected behavior when sending a message with one or more links:
 - OpenAI error: missing/invalid `OPENAI_API_KEY`.
 - Notion property mismatch: property names in Notion do not match `config/config.yaml`.
 - Duplicate issues: URL normalization or tracking strip settings may need adjustment.
+- Polling status logs too frequent: increase `telegram.status_log_interval_seconds` in `config/config.yaml`.
+
 
 Run quick checks:
 ```bash
