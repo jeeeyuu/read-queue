@@ -1,4 +1,4 @@
-app_name: "telegram-notion-reading-inbox"
+app_name: "ReadQueue"
 environment: "dev"
 log_level: "INFO"
 

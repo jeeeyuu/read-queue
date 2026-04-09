@@ -1,7 +1,7 @@
-# Telegram -> Notion Reading Inbox (Local-First)
+# ReadQueue (Local-First)
 
 ## 1. Project overview
-This project is a local Telegram-to-Notion reading inbox tool written in Python.
+ReadQueue is a local Telegram-to-Notion reading inbox tool written in Python.
 It ingests links from Telegram messages, extracts metadata, generates a cleaned Korean title and a one-line Korean summary using OpenAI, and stores everything in a Notion database.
 
 Notion is the primary UI for reading workflow management (status, read state, notes, tags).

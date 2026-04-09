@@ -74,7 +74,7 @@ class NetworkConfig(BaseModel):
 class AppConfig(BaseModel):
     """Top-level non-secret application settings."""
 
-    app_name: str = "telegram-notion-reading-inbox"
+    app_name: str = "ReadQueue"
     environment: str = "dev"
     log_level: str = "INFO"
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)

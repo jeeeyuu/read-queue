@@ -8,7 +8,7 @@ from app.config import ConfigError, load_settings
 
 
 CONFIG_YAML = """
-app_name: "telegram-notion-reading-inbox"
+app_name: "ReadQueue"
 environment: "dev"
 log_level: "INFO"
 telegram:
@@ -46,7 +46,7 @@ def test_load_settings_success(tmp_path: Path) -> None:
 
     settings = load_settings(cfg, sec)
 
-    assert settings.app.app_name == "telegram-notion-reading-inbox"
+    assert settings.app.app_name == "ReadQueue"
     assert settings.secrets.NOTION_API_KEY == "k3"
 
 

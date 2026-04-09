@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "telegram-notion-reading-inbox"
+name = "ReadQueue"
 version = "0.1.0"
 description = "Local-first Telegram to Notion reading inbox tool"
 readme = "README.md"
