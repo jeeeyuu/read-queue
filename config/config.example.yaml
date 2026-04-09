@@ -1,0 +1,46 @@
+app_name: "telegram-notion-reading-inbox"
+environment: "dev"
+log_level: "INFO"
+
+telegram:
+  mode: "polling"
+  polling_interval_seconds: 3
+  allowed_chat_ids: []
+
+openai:
+  model: "gpt-4.1-mini"
+  language: "ko"
+  max_input_chars: 4000
+
+notion:
+  database_id: "YOUR_NOTION_DATABASE_ID" # Replace with your Notion database ID.
+  properties:
+    title: "Title"
+    url: "URL"
+    canonical_url: "Canonical URL"
+    domain: "Domain"
+    original_title: "Original Title"
+    cleaned_title_ko: "Cleaned Title KO"
+    summary_one_line_ko: "Summary One Line KO"
+    status: "Status"
+    read: "Read"
+    note: "Note"
+    tags: "Tags"
+    source: "Source"
+    saved_at: "Saved At"
+    telegram_message_id: "Telegram Message ID"
+    error_message: "Error Message"
+
+defaults:
+  source: "telegram"
+  initial_status: "Inbox"
+  fallback_status_on_failure: "Failed"
+
+dedup:
+  use_canonical_url_first: true
+  strip_tracking_params: true
+
+network:
+  timeout_seconds: 20
+  max_retries: 3
+  retry_backoff_seconds: 2

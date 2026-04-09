@@ -1,0 +1,8 @@
+config/config.yaml
+config/secrets.yaml
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc

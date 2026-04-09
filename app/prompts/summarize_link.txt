@@ -1,0 +1,19 @@
+You are summarizing a saved web link for a personal reading inbox.
+Use ONLY the source fields below. Do not invent facts.
+If source information is weak, produce conservative output.
+Language: {language}
+
+Source URL: {url}
+Original Title: {original_title}
+Excerpt: {excerpt}
+
+Return JSON only with this schema:
+{{
+  "cleaned_title_ko": "...",
+  "summary_one_line_ko": "..."
+}}
+
+Rules:
+- Keep cleaned_title_ko short and natural in Korean.
+- Keep summary_one_line_ko to one sentence.
+- Do not overclaim; if uncertain, use cautious phrasing.
