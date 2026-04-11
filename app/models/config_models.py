@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TelegramConfig(BaseModel):
@@ -72,6 +72,33 @@ class NetworkConfig(BaseModel):
     retry_backoff_seconds: int = 2
 
 
+class LocalInputConfig(BaseModel):
+    """Settings for one-click local clipboard ingestion."""
+
+    enabled: bool = True
+    source_name: str = "local"
+    os_mode: str = "auto"
+
+
+class LaunchersConfig(BaseModel):
+    """Settings for generating platform launcher wrappers."""
+
+    generate_windows_bat: bool = False
+    windows_bat_output_path: str = ""
+    generate_macos_command: bool = False
+    macos_command_output_path: str = ""
+
+
+class LinuxRuntimeConfig(BaseModel):
+    """Linux/WSL runtime assumptions used by generated launchers."""
+
+    project_root: str = ""
+    run_root: str = ""
+    python_bin: str = "python3"
+    use_venv: bool = True
+    venv_path: str = ".venv"
+
+
 class AppConfig(BaseModel):
     """Top-level non-secret application settings."""
 
@@ -84,6 +111,20 @@ class AppConfig(BaseModel):
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
     dedup: DedupConfig = Field(default_factory=DedupConfig)
     network: NetworkConfig = Field(default_factory=NetworkConfig)
+    local_input: LocalInputConfig = Field(default_factory=LocalInputConfig)
+    launchers: LaunchersConfig = Field(default_factory=LaunchersConfig)
+    linux_runtime: LinuxRuntimeConfig = Field(default_factory=LinuxRuntimeConfig)
+
+    @model_validator(mode="after")
+    def validate_launcher_paths(self) -> "AppConfig":
+        if self.launchers.generate_windows_bat and not self.launchers.windows_bat_output_path:
+            raise ValueError("launchers.windows_bat_output_path is required when generate_windows_bat=true")
+        if self.launchers.generate_macos_command and not self.launchers.macos_command_output_path:
+            raise ValueError("launchers.macos_command_output_path is required when generate_macos_command=true")
+
+        if (self.launchers.generate_windows_bat or self.launchers.generate_macos_command) and not self.linux_runtime.run_root:
+            raise ValueError("linux_runtime.run_root is required when launcher generation is enabled")
+        return self
 
 
 class SecretsConfig(BaseModel):

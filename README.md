@@ -1,125 +1,162 @@
 # ReadQueue (Local-First)
 
-## 1. Project overview
-ReadQueue is a local Telegram-to-Notion reading inbox tool written in Python.
-It ingests links from Telegram messages, extracts metadata, generates a cleaned Korean title and a one-line Korean summary using OpenAI, and stores everything in a Notion database.
+## 1. Runtime Requirement (Linux/WSL First)
+ReadQueue is a Linux-based runtime application.
+- Linux: run polling and ingestion directly.
+- Windows: run the main runtime inside WSL.
+- Windows `.bat` launcher is only a trigger into WSL runtime (not a standalone Windows runtime).
 
-Notion is the primary UI for reading workflow management (status, read state, notes, tags).
-This version does **not** include a desktop app or web frontend.
+## 2. Project Overview
+ReadQueue ingests links from multiple inputs, enriches them, and stores them in Notion.
+Notion remains the primary UI for workflow management (Status, Read, Note, Tags).
+This project does not provide a desktop GUI or web frontend.
 
-## 2. Features
-- Telegram link capture (polling mode)
-- Multiple links in one message
-- Page metadata extraction (title, domain, canonical URL, excerpt)
-- OpenAI title cleanup + one-line summary in Korean
-- Notion storage with configurable property names
-- Duplicate prevention via normalized URL/canonical URL checks
-- Read-state and workflow management via Notion properties
+## 3. Input Modes
+- Telegram bot input (polling mode)
+- One-click local clipboard input (Windows/macOS/Linux/WSL)
 
-## 3. Prerequisites
+Both modes use the same shared ingestion pipeline:
+- URL extraction and normalization
+- Tracking parameter stripping
+- Duplicate detection
+- Metadata extraction
+- OpenAI Korean cleanup title + one-line summary
+- Notion storage
+
+## 4. Features
+- Telegram polling capture with multi-link message support
+- Clipboard one-click send via generated launchers
+- Shared ingestion architecture across input paths
+- Notion duplicate prevention and status workflow
+- Structured logging + retry/backoff for transient API failures
+
+## 5. Prerequisites
 - Python 3.11+
-- Telegram account
-- Telegram bot token
-- Notion integration token
-- Notion database
 - OpenAI API key
+- Notion integration token + Notion database
+- Telegram bot token (for Telegram mode)
+- WSL installed (if using Windows launcher)
 
-## 4. Setup
+## 6. Setup
 1. Install dependencies:
    ```bash
    python -m venv .venv
-   source .venv/bin/activate  # On Windows PowerShell: .venv\Scripts\Activate.ps1
+   source .venv/bin/activate
    pip install -e .[dev]
    ```
-2. Create config files from examples:
+2. Required config files:
    - Copy `config/config.example.yaml` to `config/config.yaml`
    - Copy `config/secrets.example.yaml` to `config/secrets.yaml`
-3. Fill in your real IDs and API keys in both files.
+3. Fill in real tokens/IDs.
+4. Keep `config/secrets.yaml` out of git (already ignored by `.gitignore`).
 
-## 5. Required config files
-- Copy `config/config.example.yaml` to `config/config.yaml`
-- Copy `config/secrets.example.yaml` to `config/secrets.yaml`
-
-## 6. Secret handling
-`config/secrets.yaml` must never be committed.
-This repository already excludes it in `.gitignore`.
-
-## 7. Notion setup
-1. Create a Notion internal integration in Notion settings.
-2. Copy the integration secret (Notion API key).
-3. Create a Notion database for your reading inbox.
-4. Add the required properties (see table below) and confirm names match `config/config.yaml`.
-5. Open the database menu and use **Add connections** to share it with your integration.
-6. Copy the database ID into `config/config.yaml` under `notion.database_id`.
+## 7. Notion Setup
+1. Create Notion internal integration and copy API key.
+2. Create database and add required properties.
+3. Share database with integration using **Add connections**.
+4. Put database ID in `config/config.yaml`.
 
 ### Required Notion properties
 
 | Property name | Type | Purpose |
 |---|---|---|
-| Title | title | Main display title for each saved item |
+| Title | title | Main display title |
 | URL | url | Normalized original URL |
-| Canonical URL | url | Canonical URL when available |
-| Domain | rich_text | Host/domain for quick filtering |
-| Original Title | rich_text | Raw title extracted from source page |
-| Cleaned Title KO | rich_text | OpenAI-cleaned Korean title |
+| Canonical URL | url | Canonical URL if available |
+| Domain | rich_text | Host/domain |
+| Original Title | rich_text | Raw source title |
+| Cleaned Title KO | rich_text | OpenAI cleaned Korean title |
 | Summary One Line KO | rich_text | One-line Korean summary |
-| Status | select | Workflow state (Inbox/Queued/Reading/Done/Archived/Failed) |
-| Read | checkbox | Read/unread state |
-| Note | rich_text | Personal memo |
-| Tags | multi_select | Topic tags |
-| Source | select | Ingestion source (telegram/manual) |
-| Saved At | date | Timestamp when saved |
-| Telegram Message ID | rich_text | Source Telegram message identifier |
-| Error Message | rich_text | Metadata/summarization error details |
+| Status | select | Inbox/Queued/Reading/Done/Archived/Failed |
+| Read | checkbox | Read state |
+| Note | rich_text | User note |
+| Tags | multi_select | User tags |
+| Source | select | telegram/local/manual |
+| Saved At | date | Save timestamp |
+| Telegram Message ID | rich_text | Telegram message id when source is telegram |
+| Error Message | rich_text | Warning/failure details |
 
-## 8. Telegram setup
-1. Create a bot via `@BotFather`.
-2. Get the bot token and set it in `config/secrets.yaml`.
-3. Start a chat with your bot.
-4. Optionally set `telegram.allowed_chat_ids` to restrict accepted chats.
-5. Tune polling log frequency in `config/config.yaml`:
-   - `telegram.polling_interval_seconds`: poll cycle interval
-   - `telegram.status_log_interval_seconds`: heartbeat log interval (default: 600 seconds)
+## 8. Telegram Setup
+1. Create bot via `@BotFather`.
+2. Put token in `config/secrets.yaml`.
+3. Start chat with bot.
+4. Optionally set `telegram.allowed_chat_ids`.
 
+## 9. Local Clipboard Send
+Use internal script:
+```bash
+python scripts/send_clipboard.py
+```
 
-## 9. Running the app
-Run polling mode:
+Clipboard backend behavior:
+- Windows native: `PowerShell Get-Clipboard`
+- WSL: `powershell.exe -NoProfile -Command Get-Clipboard`
+- macOS: `pbpaste`
+- Linux: `wl-paste` -> `xclip` -> `xsel`
+
+If clipboard is empty or backend is missing, script exits non-zero with a clear message.
+
+## 10. Launcher Generation
+Generate wrappers from config:
+```bash
+python scripts/generate_launchers.py
+```
+
+Configured in `config/config.yaml`:
+- `launchers.windows_bat_output_path`
+- `launchers.macos_command_output_path`
+- `linux_runtime.run_root`, `linux_runtime.python_bin`, `linux_runtime.use_venv`, `linux_runtime.venv_path`
+
+Regenerate launchers whenever runtime path or venv/python path changes.
+
+Windows path input guide (important when generating from WSL/Linux):
+- Recommended: set `launchers.windows_bat_output_path` to WSL style, e.g. `/mnt/c/Users/YOUR_NAME/Desktop/ReadQueue_SendClipboard.bat`.
+- You may also enter Windows style `C:/Users/...`; ReadQueue normalizes it to `/mnt/c/...` during generation.
+- If you previously generated with a non-normalized setup, an accidental repo-local path like `./C:/Users/...` may appear. Regenerate after fixing config and delete the mistaken folder if needed.
+
+## 11. Running
+### Telegram polling runtime (Linux/WSL)
 ```bash
 python scripts/run_polling.py
 ```
 
-By default, polling status is quiet and only emits a periodic "polling alive" heartbeat (every 600 seconds).
-Adjust `telegram.status_log_interval_seconds` in `config/config.yaml` if you want it more or less frequent.
+### Windows clipboard workflow example
+1. Run runtime setup in WSL (venv + config).
+2. Generate launcher: `python scripts/generate_launchers.py`.
+3. Double-click generated `.bat`.
+4. `.bat` calls `wsl.exe` and runs runtime-side `scripts/send_clipboard.py`.
 
-Expected behavior when sending a message with one or more links:
-1. URLs are extracted and normalized.
-2. Tracking query params are removed (if enabled).
-3. Duplicate check is run against Notion.
-4. Metadata and summary are generated for new items.
-5. A Notion record is created.
-6. Telegram reply is sent:
-   - `Saved to Notion: [cleaned title]`
-   - `Already exists in reading inbox.`
-   - `Saved with warning: metadata or summary failed.`
+### macOS clipboard workflow example
+1. Generate launcher.
+2. Double-click generated `.command`.
+3. It runs `scripts/send_clipboard.py` and exits after output.
 
-## 10. Troubleshooting
-- Notion 404/403: database is not shared with the integration (use **Add connections**).
-- Telegram auth error: invalid `TELEGRAM_BOT_TOKEN`.
-- OpenAI error: missing/invalid `OPENAI_API_KEY`.
-- Notion property mismatch: property names in Notion do not match `config/config.yaml`.
-- Duplicate issues: URL normalization or tracking strip settings may need adjustment.
-- Polling status logs too frequent: increase `telegram.status_log_interval_seconds` in `config/config.yaml`.
+## 12. Troubleshooting
+- Windows launcher path misconfigured: fix `launchers.windows_bat_output_path` and regenerate.
+- Mistaken local path created as `./C:/Users/...`: this means the launcher path was interpreted locally in WSL; use `/mnt/c/Users/...` (or keep `C:/...` with normalization), regenerate, then remove the accidental `./C:` folder.
+- WSL unavailable: ensure `wsl.exe` works from Windows.
+- Clipboard backend missing: install/use supported backend (Linux: wl-paste/xclip/xsel).
+- Launcher points to wrong runtime: check `linux_runtime.run_root` and regenerate.
+- Runtime not set up in Linux/WSL: verify venv, config files, and dependencies.
+- Notion/OpenAI errors: verify keys, Notion DB sharing, property names.
 
-
-Run quick checks:
+## 13. Tests
+Run:
 ```bash
-python scripts/healthcheck.py
 pytest
 ```
 
-## 11. Future improvements
-- Webhook mode for Telegram
-- Richer article extraction (readability-like parsing)
-- Batch import from text/CSV
-- Daily digest summary to Telegram
-- Optional local cache for offline retry queues
+Included coverage:
+- config validation
+- URL utilities
+- dedup strategy
+- shared ingestion source handling
+- clipboard backend selection
+- launcher rendering/generation
+
+## 14. Future Improvements
+- Telegram webhook mode
+- richer article extraction
+- batch import
+- daily digest report
+- optional local retry cache

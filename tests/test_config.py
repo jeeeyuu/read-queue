@@ -14,6 +14,7 @@ log_level: "INFO"
 telegram:
   mode: "polling"
   polling_interval_seconds: 3
+  status_log_interval_seconds: 600
   allowed_chat_ids: []
 openai:
   model: "gpt-4.1-mini"
@@ -25,6 +26,35 @@ notion:
 defaults: {}
 dedup: {}
 network: {}
+local_input: {}
+launchers:
+  generate_windows_bat: false
+  windows_bat_output_path: ""
+  generate_macos_command: false
+  macos_command_output_path: ""
+linux_runtime: {}
+"""
+
+BAD_LAUNCHER_CONFIG_YAML = """
+app_name: "ReadQueue"
+environment: "dev"
+log_level: "INFO"
+telegram: {}
+openai: {}
+notion:
+  database_id: "db123"
+  properties: {}
+defaults: {}
+dedup: {}
+network: {}
+local_input: {}
+launchers:
+  generate_windows_bat: true
+  windows_bat_output_path: ""
+  generate_macos_command: false
+  macos_command_output_path: ""
+linux_runtime:
+  run_root: ""
 """
 
 SECRETS_YAML = """
@@ -66,4 +96,14 @@ def test_load_settings_missing_required_secret(tmp_path: Path) -> None:
     write_file(sec, 'OPENAI_API_KEY: "x"\n')
 
     with pytest.raises(ConfigError, match="secrets.yaml validation failed"):
+        load_settings(cfg, sec)
+
+
+def test_load_settings_invalid_launcher_config(tmp_path: Path) -> None:
+    cfg = tmp_path / "config.yaml"
+    sec = tmp_path / "secrets.yaml"
+    write_file(cfg, BAD_LAUNCHER_CONFIG_YAML)
+    write_file(sec, SECRETS_YAML)
+
+    with pytest.raises(ConfigError, match="windows_bat_output_path"):
         load_settings(cfg, sec)
