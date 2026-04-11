@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from app.utils.url_utils import extract_urls, normalize_url, strip_tracking_params
+from app.utils.url_utils import extract_non_url_text, extract_urls, normalize_url, strip_tracking_params
 
 
 def test_extract_urls_multiple_links() -> None:
     text = "Check https://example.com/a?x=1 and https://foo.bar/path"
     assert extract_urls(text) == ["https://example.com/a?x=1", "https://foo.bar/path"]
+
+
+def test_extract_non_url_text() -> None:
+    text = "읽을거리: https://example.com/a\n메모도 같이\nhttps://foo.bar/path"
+    assert extract_non_url_text(text) == "읽을거리:\n메모도 같이"
 
 
 def test_strip_tracking_params() -> None:

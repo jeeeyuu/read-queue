@@ -26,6 +26,18 @@ def extract_urls(text: str) -> list[str]:
     return URL_PATTERN.findall(text or "")
 
 
+def extract_non_url_text(text: str) -> str:
+    """Extract human note text by removing URLs and collapsing extra whitespace."""
+
+    if not text:
+        return ""
+    without_urls = URL_PATTERN.sub(" ", text)
+    # Keep line breaks meaningful while removing noisy extra spaces.
+    lines = [" ".join(line.split()) for line in without_urls.splitlines()]
+    cleaned = "\n".join(line for line in lines if line).strip()
+    return cleaned
+
+
 def strip_tracking_params(url: str) -> str:
     """Remove common tracking parameters while preserving useful query values."""
 

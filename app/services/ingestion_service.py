@@ -12,11 +12,12 @@ from app.services.dedup_service import DedupService
 from app.services.metadata_service import MetadataResult, MetadataService
 from app.services.notion_service import NotionService
 from app.services.openai_service import OpenAIService
-from app.utils.url_utils import extract_urls, normalize_url
+from app.utils.url_utils import extract_non_url_text, extract_urls, normalize_url
 
 logger = logging.getLogger(__name__)
 
 FAIL_MESSAGE = "Saved with warning: metadata or summary failed."
+DUPLICATE_MESSAGE = "Already exists in reading inbox."
 
 
 class IngestionService:
@@ -40,6 +41,7 @@ class IngestionService:
         self,
         *,
         source: str,
+        note: str | None,
         url: str,
         canonical_url: str | None,
         domain: str,
@@ -64,7 +66,7 @@ class IngestionService:
             summary_one_line_ko=summary_one_line_ko,
             status=status,
             read=False,
-            note=None,
+            note=note,
             tags=[],
             source=source or defaults.source,
             saved_at_iso=datetime.now(timezone.utc).isoformat(),
@@ -79,6 +81,7 @@ class IngestionService:
         metadata: MetadataResult,
         telegram_message_id: int | None,
         source: str,
+        note: str | None,
     ) -> ProcessingItemResult | None:
         for candidate in self._dedup.candidate_urls(normalized_original, normalized_canonical):
             dup_page = self._notion.query_by_url(candidate)
@@ -87,6 +90,7 @@ class IngestionService:
 
             payload = self._build_payload(
                 source=source,
+                note=note,
                 url=normalized_original,
                 canonical_url=normalized_canonical,
                 domain=metadata.domain,
@@ -104,7 +108,7 @@ class IngestionService:
             return ProcessingItemResult(
                 url=normalized_original,
                 status="duplicate",
-                message="Already exists in reading inbox.",
+                message=DUPLICATE_MESSAGE,
             )
         return None
 
@@ -112,6 +116,7 @@ class IngestionService:
         self,
         raw_url: str,
         source: str,
+        note: str | None,
         telegram_message_id: int | None,
     ) -> ProcessingItemResult:
         strip_tracking = self._cfg.dedup.strip_tracking_params
@@ -123,7 +128,7 @@ class IngestionService:
                 return ProcessingItemResult(
                     url=normalized_original,
                     status="duplicate",
-                    message="Already exists in reading inbox.",
+                    message=DUPLICATE_MESSAGE,
                 )
 
             metadata = self._metadata.fetch(normalized_original)
@@ -139,6 +144,7 @@ class IngestionService:
                 metadata,
                 telegram_message_id,
                 source,
+                note,
             )
             if duplicate:
                 return duplicate
@@ -158,6 +164,7 @@ class IngestionService:
 
             payload = self._build_payload(
                 source=source,
+                note=note,
                 url=normalized_original,
                 canonical_url=normalized_canonical,
                 domain=metadata.domain,
@@ -198,14 +205,44 @@ class IngestionService:
         source: str,
         telegram_message_id: int | None = None,
     ) -> ProcessingResult:
-        """Process all URLs in input text using shared ingestion flow."""
+        """Process all URLs in input text using shared ingestion flow.
+
+        For multi-link input, links are processed independently in message order.
+        If duplicated links appear in the same input, only the first one is processed,
+        and the rest are marked as duplicate.
+        """
 
         urls = extract_urls(text)
         if not urls:
             return ProcessingResult(source=source, input_text=text, item_results=[])
 
-        results = [
-            self._process_single_url(raw_url=url, source=source, telegram_message_id=telegram_message_id)
-            for url in urls
-        ]
+        note_text = extract_non_url_text(text) or None
+        strip_tracking = self._cfg.dedup.strip_tracking_params
+
+        results: list[ProcessingItemResult] = []
+        seen_normalized: set[str] = set()
+
+        for raw_url in urls:
+            normalized = normalize_url(raw_url, strip_tracking=strip_tracking)
+            if normalized in seen_normalized:
+                results.append(
+                    ProcessingItemResult(
+                        url=normalized,
+                        status="duplicate",
+                        message=DUPLICATE_MESSAGE,
+                        error="duplicate url in same input",
+                    )
+                )
+                continue
+
+            seen_normalized.add(normalized)
+            results.append(
+                self._process_single_url(
+                    raw_url=raw_url,
+                    source=source,
+                    note=note_text,
+                    telegram_message_id=telegram_message_id,
+                )
+            )
+
         return ProcessingResult(source=source, input_text=text, item_results=results)

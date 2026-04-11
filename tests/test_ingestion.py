@@ -76,6 +76,62 @@ def test_process_input_text_uses_local_source() -> None:
     assert notion.created[0].source == "local"
 
 
+def test_process_input_text_saves_non_url_text_to_note() -> None:
+    notion = FakeNotion()
+    svc = IngestionService(
+        app_config=_app_config(),
+        notion=notion,
+        metadata=FakeMetadata(),
+        openai=FakeOpenAI(),
+        dedup=DedupService(DedupConfig(use_canonical_url_first=True, strip_tracking_params=True)),
+    )
+
+    svc.process_input_text("이건 링크 설명 메모 https://example.com/post", source="local")
+
+    assert notion.created[0].note == "이건 링크 설명 메모"
+
+
+def test_process_input_text_multiple_links_share_same_note() -> None:
+    notion = FakeNotion()
+    svc = IngestionService(
+        app_config=_app_config(),
+        notion=notion,
+        metadata=FakeMetadata(),
+        openai=FakeOpenAI(),
+        dedup=DedupService(DedupConfig(use_canonical_url_first=True, strip_tracking_params=True)),
+    )
+
+    result = svc.process_input_text(
+        "메모 텍스트 https://example.com/a 그리고 https://example.com/b",
+        source="local",
+    )
+
+    assert result.success_count == 2
+    assert len(notion.created) == 2
+    assert notion.created[0].note == "메모 텍스트 그리고"
+    assert notion.created[1].note == "메모 텍스트 그리고"
+
+
+def test_process_input_text_dedups_same_link_in_one_input() -> None:
+    notion = FakeNotion()
+    svc = IngestionService(
+        app_config=_app_config(),
+        notion=notion,
+        metadata=FakeMetadata(),
+        openai=FakeOpenAI(),
+        dedup=DedupService(DedupConfig(use_canonical_url_first=True, strip_tracking_params=True)),
+    )
+
+    result = svc.process_input_text(
+        "https://example.com/a https://example.com/a",
+        source="local",
+    )
+
+    assert result.success_count == 1
+    assert result.duplicate_count == 1
+    assert len(notion.created) == 1
+
+
 def test_process_input_text_duplicate() -> None:
     notion = FakeNotion()
     svc = IngestionService(

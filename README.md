@@ -21,10 +21,13 @@ Both modes use the same shared ingestion pipeline:
 - Duplicate detection
 - Metadata extraction
 - OpenAI Korean cleanup title + one-line summary
+- Non-link text extraction to Notion `Note`
 - Notion storage
 
 ## 4. Features
-- Telegram polling capture with multi-link message support
+- Telegram polling capture with robust multi-link message support
+- Multi-link input processing in order with per-input duplicate suppression
+- Same non-link text is written to `Note` for every link in the same input
 - Clipboard one-click send via generated launchers
 - Shared ingestion architecture across input paths
 - Notion duplicate prevention and status workflow
@@ -95,6 +98,11 @@ Clipboard backend behavior:
 - Linux: `wl-paste` -> `xclip` -> `xsel`
 
 If clipboard is empty or backend is missing, script exits non-zero with a clear message.
+
+Input parsing behavior (applies to Telegram and clipboard):
+- If one input contains multiple links, each link is processed as a separate Notion item.
+- If the same link appears multiple times in one input, only the first is processed and the rest are marked duplicate.
+- Any non-link text in that same input is stored in the `Note` field for all links created from that input.
 
 ## 10. Launcher Generation
 Generate wrappers from config:
