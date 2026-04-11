@@ -24,23 +24,37 @@ Both modes use the same shared ingestion pipeline:
 - Non-link text extraction to Notion `Note`
 - Notion storage
 
-## 4. Features
-- Telegram polling capture with robust multi-link message support
-- Multi-link input processing in order with per-input duplicate suppression
-- Same non-link text is written to `Note` for every link in the same input
+## 4. Latest Behavior Updates
+- Robust multi-link processing:
+  - One input with multiple links creates separate Notion items per link.
+  - Processing order follows input order.
+  - Duplicate links inside the same single input are suppressed after first processing.
+- Shared note behavior:
+  - Non-link text from the same input is copied to `Note` for all links in that input.
+- Improved URL parsing:
+  - URLs containing parentheses like `.../Function_(mathematics)` are handled correctly.
+  - Wrapping punctuation (for example trailing `)` from surrounding text) is trimmed safely.
+- Metadata failure fallback:
+  - If page metadata extraction fails, ReadQueue can summarize the accompanying input text via OpenAI and still fill title/summary fields.
+- Duplicate note append:
+  - If a link already exists and new non-link text is sent with it, ReadQueue appends that text to existing `Note` on a new line.
+  - Existing `Note` content is not overwritten.
+
+## 5. Features
+- Telegram polling capture with robust multi-link support
 - Clipboard one-click send via generated launchers
 - Shared ingestion architecture across input paths
 - Notion duplicate prevention and status workflow
 - Structured logging + retry/backoff for transient API failures
 
-## 5. Prerequisites
+## 6. Prerequisites
 - Python 3.11+
 - OpenAI API key
 - Notion integration token + Notion database
 - Telegram bot token (for Telegram mode)
 - WSL installed (if using Windows launcher)
 
-## 6. Setup
+## 7. Setup
 1. Install dependencies:
    ```bash
    python -m venv .venv
@@ -53,7 +67,7 @@ Both modes use the same shared ingestion pipeline:
 3. Fill in real tokens/IDs.
 4. Keep `config/secrets.yaml` out of git (already ignored by `.gitignore`).
 
-## 7. Notion Setup
+## 8. Notion Setup
 1. Create Notion internal integration and copy API key.
 2. Create database and add required properties.
 3. Share database with integration using **Add connections**.
@@ -72,20 +86,20 @@ Both modes use the same shared ingestion pipeline:
 | Summary One Line KO | rich_text | One-line Korean summary |
 | Status | select | Inbox/Queued/Reading/Done/Archived/Failed |
 | Read | checkbox | Read state |
-| Note | rich_text | User note |
+| Note | rich_text | User note (including appended duplicate notes) |
 | Tags | multi_select | User tags |
 | Source | select | telegram/local/manual |
 | Saved At | date | Save timestamp |
 | Telegram Message ID | rich_text | Telegram message id when source is telegram |
 | Error Message | rich_text | Warning/failure details |
 
-## 8. Telegram Setup
+## 9. Telegram Setup
 1. Create bot via `@BotFather`.
 2. Put token in `config/secrets.yaml`.
 3. Start chat with bot.
 4. Optionally set `telegram.allowed_chat_ids`.
 
-## 9. Local Clipboard Send
+## 10. Local Clipboard Send
 Use internal script:
 ```bash
 python scripts/send_clipboard.py
@@ -103,8 +117,9 @@ Input parsing behavior (applies to Telegram and clipboard):
 - If one input contains multiple links, each link is processed as a separate Notion item.
 - If the same link appears multiple times in one input, only the first is processed and the rest are marked duplicate.
 - Any non-link text in that same input is stored in the `Note` field for all links created from that input.
+- If a link is duplicate and non-link text exists, that text is appended to the existing Notion `Note` with a newline.
 
-## 10. Launcher Generation
+## 11. Launcher Generation
 Generate wrappers from config:
 ```bash
 python scripts/generate_launchers.py
@@ -122,7 +137,7 @@ Windows path input guide (important when generating from WSL/Linux):
 - You may also enter Windows style `C:/Users/...`; ReadQueue normalizes it to `/mnt/c/...` during generation.
 - If you previously generated with a non-normalized setup, an accidental repo-local path like `./C:/Users/...` may appear. Regenerate after fixing config and delete the mistaken folder if needed.
 
-## 11. Running
+## 12. Running
 ### Telegram polling runtime (Linux/WSL)
 ```bash
 python scripts/run_polling.py
@@ -139,7 +154,17 @@ python scripts/run_polling.py
 2. Double-click generated `.command`.
 3. It runs `scripts/send_clipboard.py` and exits after output.
 
-## 12. Troubleshooting
+## 13. Polling Runtime Availability
+ReadQueue Telegram mode runs by polling.
+That means ingestion only continues while the polling process is alive.
+
+In practice, you must choose one of these:
+- Keep your computer on and keep `scripts/run_polling.py` running.
+- Deploy runtime to an always-on server/host (for example Linux VM/cloud instance) and keep the process running there.
+
+If your machine sleeps/shuts down or process stops, Telegram ingestion stops until restarted.
+
+## 14. Troubleshooting
 - Windows launcher path misconfigured: fix `launchers.windows_bat_output_path` and regenerate.
 - Mistaken local path created as `./C:/Users/...`: this means the launcher path was interpreted locally in WSL; use `/mnt/c/Users/...` (or keep `C:/...` with normalization), regenerate, then remove the accidental `./C:` folder.
 - WSL unavailable: ensure `wsl.exe` works from Windows.
@@ -147,8 +172,9 @@ python scripts/run_polling.py
 - Launcher points to wrong runtime: check `linux_runtime.run_root` and regenerate.
 - Runtime not set up in Linux/WSL: verify venv, config files, and dependencies.
 - Notion/OpenAI errors: verify keys, Notion DB sharing, property names.
+- Metadata extraction failed often: check target site restrictions; ReadQueue will fallback to input-text summarization when possible.
 
-## 13. Tests
+## 15. Tests
 Run:
 ```bash
 pytest
@@ -156,13 +182,15 @@ pytest
 
 Included coverage:
 - config validation
-- URL utilities
+- URL utilities (including parentheses/punctuation handling)
 - dedup strategy
 - shared ingestion source handling
 - clipboard backend selection
 - launcher rendering/generation
+- metadata-failure fallback summarization
+- duplicate-note append behavior
 
-## 14. Future Improvements
+## 16. Future Improvements
 - Telegram webhook mode
 - richer article extraction
 - batch import

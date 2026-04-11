@@ -17,13 +17,47 @@ TRACKING_EXACT_KEYS = {
     "si",
 }
 
-URL_PATTERN = re.compile(r"https?://[^\s<>\]\[\)\(\"']+", re.IGNORECASE)
+# Allow parentheses in URL body, then trim wrapping punctuation in post-processing.
+RAW_URL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+
+_TRAILING_PUNCT = ".,!?:;"
+
+
+def _trim_wrapping_punctuation(url: str) -> str:
+    """Trim trailing punctuation while preserving balanced URL parentheses."""
+
+    candidate = url
+
+    # Remove obvious trailing sentence punctuation first.
+    while candidate and candidate[-1] in _TRAILING_PUNCT:
+        candidate = candidate[:-1]
+
+    # Remove unmatched closing wrappers at the end.
+    while candidate and candidate[-1] in ")]}":
+        last = candidate[-1]
+        if last == ")" and candidate.count(")") > candidate.count("("):
+            candidate = candidate[:-1]
+            continue
+        if last == "]" and candidate.count("]") > candidate.count("["):
+            candidate = candidate[:-1]
+            continue
+        if last == "}" and candidate.count("}") > candidate.count("{"):
+            candidate = candidate[:-1]
+            continue
+        break
+
+    return candidate
 
 
 def extract_urls(text: str) -> list[str]:
     """Extract HTTP(S) URLs from free-form text, preserving order."""
 
-    return URL_PATTERN.findall(text or "")
+    out: list[str] = []
+    for raw in RAW_URL_PATTERN.findall(text or ""):
+        cleaned = _trim_wrapping_punctuation(raw)
+        if cleaned:
+            out.append(cleaned)
+    return out
 
 
 def extract_non_url_text(text: str) -> str:
@@ -31,7 +65,11 @@ def extract_non_url_text(text: str) -> str:
 
     if not text:
         return ""
-    without_urls = URL_PATTERN.sub(" ", text)
+
+    without_urls = text
+    for url in extract_urls(text):
+        without_urls = without_urls.replace(url, " ")
+
     # Keep line breaks meaningful while removing noisy extra spaces.
     lines = [" ".join(line.split()) for line in without_urls.splitlines()]
     cleaned = "\n".join(line for line in lines if line).strip()

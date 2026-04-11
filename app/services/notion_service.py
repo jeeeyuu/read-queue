@@ -64,6 +64,61 @@ class NotionService:
             iso_value = datetime.now(timezone.utc).isoformat()
         return {"date": {"start": iso_value}}
 
+    def _get_page(self, page_id: str) -> dict[str, Any]:
+        def _call() -> dict[str, Any]:
+            with httpx.Client(timeout=self._timeout) as client:
+                resp = client.get(
+                    f"https://api.notion.com/v1/pages/{page_id}",
+                    headers=self._headers(),
+                )
+                resp.raise_for_status()
+                return resp.json()
+
+        return request_with_retry(_call, self._max_retries, self._retry_backoff_seconds)
+
+    @staticmethod
+    def _rich_text_to_plain_text(prop: dict[str, Any] | None) -> str:
+        if not prop:
+            return ""
+        parts: list[str] = []
+        for item in prop.get("rich_text", []):
+            text = item.get("plain_text")
+            if text is None:
+                text = ((item.get("text") or {}).get("content"))
+            if text:
+                parts.append(text)
+        return "".join(parts).strip()
+
+    def append_note_without_overwrite(self, page_id: str, note_to_append: str | None) -> None:
+        """Append note text to existing Note field instead of overwriting it."""
+
+        if not note_to_append or not note_to_append.strip():
+            return
+
+        props = self._cfg.properties
+        page = self._get_page(page_id)
+        note_prop = (page.get("properties") or {}).get(props.note)
+        existing = self._rich_text_to_plain_text(note_prop)
+
+        appended = note_to_append.strip()
+        if existing:
+            combined = f"{existing}\n{appended}"
+        else:
+            combined = appended
+
+        data = {props.note: self._rich_text(combined)}
+
+        def _call() -> None:
+            with httpx.Client(timeout=self._timeout) as client:
+                resp = client.patch(
+                    f"https://api.notion.com/v1/pages/{page_id}",
+                    headers=self._headers(),
+                    json={"properties": data},
+                )
+                resp.raise_for_status()
+
+        request_with_retry(_call, self._max_retries, self._retry_backoff_seconds)
+
     def query_by_url(self, normalized_url: str) -> str | None:
         """Find first page id where URL property exactly matches normalized_url."""
 

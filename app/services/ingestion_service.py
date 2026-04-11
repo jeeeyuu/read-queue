@@ -102,6 +102,8 @@ class IngestionService:
             )
             try:
                 self._notion.update_missing_text_fields(dup_page, payload)
+                if note:
+                    self._notion.append_note_without_overwrite(dup_page, note)
             except Exception:  # noqa: BLE001
                 logger.exception("failed to update duplicate with missing metadata")
 
@@ -125,6 +127,11 @@ class IngestionService:
         try:
             early_dup = self._notion.query_by_url(normalized_original)
             if early_dup:
+                if note:
+                    try:
+                        self._notion.append_note_without_overwrite(early_dup, note)
+                    except Exception:  # noqa: BLE001
+                        logger.exception("failed to append note on early duplicate")
                 return ProcessingItemResult(
                     url=normalized_original,
                     status="duplicate",
@@ -161,6 +168,17 @@ class IngestionService:
                 )
                 if summarize_error:
                     warning = summarize_error
+            elif note:
+                # Metadata fetch failed; fallback to user-provided text context.
+                cleaned_title, summary_one_line, summarize_error = self._openai.summarize_from_text(
+                    url=normalized_original,
+                    input_text=note,
+                )
+                if summarize_error:
+                    warning = f"{metadata.error}; fallback summarize failed: {summarize_error}"
+                else:
+                    # Consider fallback successful and avoid failed status when possible.
+                    warning = None
 
             payload = self._build_payload(
                 source=source,
@@ -168,7 +186,7 @@ class IngestionService:
                 url=normalized_original,
                 canonical_url=normalized_canonical,
                 domain=metadata.domain,
-                original_title=metadata.original_title,
+                original_title=metadata.original_title or (note[:200] if note else None),
                 cleaned_title_ko=cleaned_title,
                 summary_one_line_ko=summary_one_line,
                 telegram_message_id=telegram_message_id,
