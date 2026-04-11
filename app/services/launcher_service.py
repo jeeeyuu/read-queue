@@ -21,6 +21,14 @@ def _single_quote(text: str) -> str:
     return text.replace("'", "'\"'\"'")
 
 
+def bind_runtime_root(app_config: AppConfig, runtime_root: str | Path) -> None:
+    """Force runtime root to current project location during launcher generation."""
+
+    root = str(Path(runtime_root).resolve())
+    app_config.linux_runtime.project_root = root
+    app_config.linux_runtime.run_root = root
+
+
 def build_linux_runtime_command(app_config: AppConfig) -> str:
     """Build bash command that runs clipboard send in Linux runtime."""
 
@@ -37,19 +45,40 @@ def build_linux_runtime_command(app_config: AppConfig) -> str:
 
 
 def render_windows_bat(app_config: AppConfig) -> str:
-    """Render Windows .bat content that calls WSL runtime."""
+    """Render Windows .bat content that calls WSL runtime.
+
+    Success path exits immediately so the console closes on its own.
+    Failure path can pause (configurable) so users can read errors.
+    """
 
     command = build_linux_runtime_command(app_config).replace('"', r'\"')
-    return (
-        "@echo off\n"
-        "setlocal\n"
-        f"wsl.exe -e bash -lc \"{command}\"\n"
-        "set EXIT_CODE=%ERRORLEVEL%\n"
-        "if %EXIT_CODE% neq 0 (\n"
-        "  echo ReadQueue clipboard send failed. Exit code: %EXIT_CODE%\n"
-        ")\n"
-        "exit /b %EXIT_CODE%\n"
+    lines = [
+        "@echo off",
+        "setlocal",
+        f"wsl.exe -e bash -lc \"{command}\"",
+        "set EXIT_CODE=%ERRORLEVEL%",
+        "if %EXIT_CODE% neq 0 (",
+        "  echo ReadQueue clipboard send failed. Exit code: %EXIT_CODE%",
+    ]
+
+    if app_config.launchers.windows_pause_on_exit:
+        lines.extend(
+            [
+                "  echo.",
+                "  pause",
+            ]
+        )
+
+    lines.extend(
+        [
+            ") else (",
+            "  echo ReadQueue clipboard send finished. Exit code: %EXIT_CODE%",
+            ")",
+        ]
     )
+
+    lines.append("exit /b %EXIT_CODE%")
+    return "\n".join(lines) + "\n"
 
 
 def render_macos_command(app_config: AppConfig) -> str:
@@ -60,11 +89,7 @@ def render_macos_command(app_config: AppConfig) -> str:
 
 
 def _normalize_output_path(path_text: str) -> Path:
-    """Normalize launcher output path for Linux/WSL runtime generation.
-
-    In WSL/Linux, if user provides Windows-style path such as C:/Users/...,
-    convert it to /mnt/c/Users/... so files are written to real Windows FS.
-    """
+    """Normalize launcher output path for Linux/WSL runtime generation."""
 
     expanded = path_text.strip()
     drive_match = re.match(r"^([A-Za-z]):[\\/](.*)$", expanded)

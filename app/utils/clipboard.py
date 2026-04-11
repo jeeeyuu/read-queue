@@ -28,6 +28,26 @@ def _is_wsl(system_name: str, release_name: str, env: dict[str, str]) -> bool:
     return "microsoft" in release_lower or "WSL_DISTRO_NAME" in env
 
 
+def _decode_output(raw: bytes, backend_name: str) -> str:
+    """Decode command output robustly across platform encodings."""
+
+    if not raw:
+        return ""
+
+    if backend_name in {"wsl-powershell", "powershell"}:
+        encodings = ["utf-8", "utf-8-sig", "utf-16", "utf-16-le", "cp949", "euc-kr", "cp1252"]
+    else:
+        encodings = ["utf-8", "utf-16", "cp949", "euc-kr", "cp1252"]
+
+    for enc in encodings:
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+
+    return raw.decode("utf-8", errors="replace")
+
+
 def detect_clipboard_backend(
     os_mode: str = "auto",
     system_name: str | None = None,
@@ -59,14 +79,27 @@ def detect_clipboard_backend(
 
     if resolved == "windows":
         if command_exists("powershell"):
-            return ClipboardBackend("powershell", ["powershell", "-NoProfile", "-Command", "Get-Clipboard"])
+            return ClipboardBackend(
+                "powershell",
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); Get-Clipboard -Raw",
+                ],
+            )
         raise ClipboardError("Windows clipboard backend not available: powershell")
 
     if resolved == "wsl":
         if command_exists("powershell.exe"):
             return ClipboardBackend(
                 "wsl-powershell",
-                ["powershell.exe", "-NoProfile", "-Command", "Get-Clipboard"],
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-Command",
+                    "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); Get-Clipboard -Raw",
+                ],
             )
         raise ClipboardError("WSL clipboard backend not available: powershell.exe")
 
@@ -88,12 +121,12 @@ def read_clipboard_text(os_mode: str = "auto") -> str:
     """Read current clipboard text with auto-selected backend."""
 
     backend = detect_clipboard_backend(os_mode=os_mode)
-    proc = subprocess.run(backend.command, capture_output=True, text=True, check=False)
+    proc = subprocess.run(backend.command, capture_output=True, text=False, check=False)
     if proc.returncode != 0:
-        stderr = (proc.stderr or "").strip()
+        stderr = _decode_output(proc.stderr or b"", backend.name).strip()
         raise ClipboardError(f"Clipboard read failed via {backend.name}: {stderr or 'unknown error'}")
 
-    text = (proc.stdout or "").replace("\ufeff", "").strip()
+    text = _decode_output(proc.stdout or b"", backend.name).replace("\ufeff", "").strip()
     if not text:
         raise ClipboardError("Clipboard is empty.")
     return text

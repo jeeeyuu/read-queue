@@ -85,6 +85,7 @@ class LaunchersConfig(BaseModel):
 
     generate_windows_bat: bool = False
     windows_bat_output_path: str = ""
+    windows_pause_on_exit: bool = True
     generate_macos_command: bool = False
     macos_command_output_path: str = ""
 

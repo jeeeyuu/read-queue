@@ -41,6 +41,17 @@ def test_render_windows_bat_contains_wsl_and_send_clipboard(tmp_path: Path) -> N
     assert "scripts/send_clipboard.py" in content
 
 
+def test_windows_bat_pauses_only_on_failure(tmp_path: Path) -> None:
+    app_cfg = AppConfig.model_validate(_base_config(tmp_path))
+    content = render_windows_bat(app_cfg)
+
+    failure_idx = content.index("if %EXIT_CODE% neq 0 (")
+    pause_idx = content.index("  pause")
+    success_idx = content.index(") else (")
+
+    assert failure_idx < pause_idx < success_idx
+
+
 def test_render_macos_command_contains_runtime_command(tmp_path: Path) -> None:
     app_cfg = AppConfig.model_validate(_base_config(tmp_path))
     content = render_macos_command(app_cfg)

@@ -54,6 +54,7 @@ local_input:
 launchers:
   generate_windows_bat: true
   windows_bat_output_path: "/mnt/c/Users/yourname/Desktop/ReadQueue_SendClipboard.bat"
+  windows_pause_on_exit: true
   generate_macos_command: true
   macos_command_output_path: "/Users/yourname/Desktop/ReadQueue_SendClipboard.command"
 

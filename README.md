@@ -127,6 +127,7 @@ python scripts/generate_launchers.py
 
 Configured in `config/config.yaml`:
 - `launchers.windows_bat_output_path`
+- `launchers.windows_pause_on_exit` (keep .bat console open so you can read output/errors)
 - `launchers.macos_command_output_path`
 - `linux_runtime.run_root`, `linux_runtime.python_bin`, `linux_runtime.use_venv`, `linux_runtime.venv_path`
 
@@ -148,6 +149,7 @@ python scripts/run_polling.py
 2. Generate launcher: `python scripts/generate_launchers.py`.
 3. Double-click generated `.bat`.
 4. `.bat` calls `wsl.exe` and runs runtime-side `scripts/send_clipboard.py`.
+5. If the console closes too quickly, set `launchers.windows_pause_on_exit: true` and regenerate launchers.
 
 ### macOS clipboard workflow example
 1. Generate launcher.
