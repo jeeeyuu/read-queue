@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
-
 class TelegramConfig(BaseModel):
     """Telegram bot behavior configuration."""
 
     mode: str = "polling"
     polling_interval_seconds: int = 3
     status_log_interval_seconds: int = 600
-    allowed_chat_ids: list[int] = Field(default_factory=list)
+    private_chat_only: bool = False
 
 
 class OpenAIConfig(BaseModel):
@@ -134,6 +133,7 @@ class SecretsConfig(BaseModel):
     OPENAI_API_KEY: str
     TELEGRAM_BOT_TOKEN: str
     NOTION_API_KEY: str
+    TELEGRAM_ALLOWED_CHAT_IDS: list[int] = Field(default_factory=list)
 
 
 class Settings(BaseModel):

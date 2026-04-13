@@ -97,7 +97,19 @@ Both modes use the same shared ingestion pipeline:
 1. Create bot via `@BotFather`.
 2. Put token in `config/secrets.yaml`.
 3. Start chat with bot.
-4. Optionally set `telegram.allowed_chat_ids`.
+4. Configure chat_id access control in `config/secrets.yaml`:
+   - `TELEGRAM_ALLOWED_CHAT_IDS`
+   - `TELEGRAM_DENIED_CHAT_IDS`
+5. Optional hardening: set `telegram.private_chat_only: true` to ignore non-private chats.
+
+Access-control behavior (checked before ingestion pipeline work):
+- Default deny: if allowlist is empty, Telegram updates are rejected.
+- Polling still consumes updates and advances offset even when unauthorized.
+- Unauthorized updates are discarded before URL extraction/metadata/OpenAI/Notion calls.
+- Unauthorized updates are consumed and discarded silently (no reply/action).
+
+Notion source behavior for authorized Telegram messages:
+- `Source` is stored as `telegram:username` (example: `telegram:alice`).
 
 ## 10. Local Clipboard Send
 Use internal script:
@@ -173,6 +185,8 @@ If your machine sleeps/shuts down or process stops, Telegram ingestion stops unt
 - Clipboard backend missing: install/use supported backend (Linux: wl-paste/xclip/xsel).
 - Launcher points to wrong runtime: check `linux_runtime.run_root` and regenerate.
 - Runtime not set up in Linux/WSL: verify venv, config files, and dependencies.
+- Unauthorized sender unexpectedly blocked: verify `TELEGRAM_ALLOWED_CHAT_IDS`.
+- Group message ignored: check `telegram.private_chat_only` setting.
 - Notion/OpenAI errors: verify keys, Notion DB sharing, property names.
 - Metadata extraction failed often: check target site restrictions; ReadQueue will fallback to input-text summarization when possible.
 

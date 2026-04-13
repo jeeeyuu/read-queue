@@ -166,7 +166,18 @@ class IngestionService:
                     original_title=metadata.original_title,
                     excerpt=metadata.excerpt,
                 )
-                if summarize_error:
+                if summarize_error and note:
+                    # Metadata exists but was too poor for summarization; fallback to user text.
+                    fb_title, fb_summary, fallback_error = self._openai.summarize_from_text(
+                        url=metadata.final_url,
+                        input_text=note,
+                    )
+                    if fallback_error:
+                        warning = f"summary failed: {summarize_error}; fallback summarize failed: {fallback_error}"
+                    else:
+                        cleaned_title, summary_one_line = fb_title, fb_summary
+                        warning = None
+                elif summarize_error:
                     warning = summarize_error
             elif note:
                 # Metadata fetch failed; fallback to user-provided text context.
@@ -186,7 +197,7 @@ class IngestionService:
                 url=normalized_original,
                 canonical_url=normalized_canonical,
                 domain=metadata.domain,
-                original_title=metadata.original_title or (note[:200] if note else None),
+                original_title=metadata.original_title,
                 cleaned_title_ko=cleaned_title,
                 summary_one_line_ko=summary_one_line,
                 telegram_message_id=telegram_message_id,

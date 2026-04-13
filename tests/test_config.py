@@ -15,7 +15,6 @@ telegram:
   mode: "polling"
   polling_interval_seconds: 3
   status_log_interval_seconds: 600
-  allowed_chat_ids: []
 openai:
   model: "gpt-4.1-mini"
   language: "ko"

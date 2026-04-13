@@ -54,6 +54,19 @@ class FailingMetadata:
         )
 
 
+class PoorMetadata:
+    def fetch(self, url: str) -> MetadataResult:
+        return MetadataResult(
+            requested_url=url,
+            final_url=url,
+            canonical_url=None,
+            domain="example.com",
+            original_title=None,
+            excerpt=None,
+            error=None,
+        )
+
+
 class FakeOpenAI:
     def summarize(self, url: str, original_title: str | None, excerpt: str | None):
         return "정리 제목", "한 줄 요약", None
@@ -65,6 +78,11 @@ class FakeOpenAI:
 class FailingFallbackOpenAI(FakeOpenAI):
     def summarize_from_text(self, url: str, input_text: str):
         return None, None, "fallback failed"
+
+
+class MetadataInsufficientOpenAI(FakeOpenAI):
+    def summarize(self, url: str, original_title: str | None, excerpt: str | None):
+        return None, None, "insufficient source text"
 
 
 def _app_config() -> AppConfig:
@@ -212,3 +230,25 @@ def test_metadata_failure_and_fallback_failure_keeps_warning() -> None:
 
     assert result.warning_count == 1
     assert "fallback summarize failed" in (result.item_results[0].error or "")
+
+
+def test_metadata_poor_content_uses_note_fallback_summary() -> None:
+    notion = FakeNotion()
+    svc = IngestionService(
+        app_config=_app_config(),
+        notion=notion,
+        metadata=PoorMetadata(),
+        openai=MetadataInsufficientOpenAI(),
+        dedup=DedupService(DedupConfig(use_canonical_url_first=True, strip_tracking_params=True)),
+    )
+
+    result = svc.process_input_text(
+        "컨텍스트 메모 https://example.com/poor-meta",
+        source="local",
+    )
+
+    assert result.success_count == 1
+    assert notion.created[0].cleaned_title_ko == "메모 기반 제목"
+    assert notion.created[0].summary_one_line_ko == "메모 기반 한 줄 요약"
+    assert notion.created[0].original_title is None
+    assert notion.created[0].error_message is None

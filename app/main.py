@@ -7,12 +7,14 @@ import time
 
 from app.config import load_settings
 from app.models.processing_models import ProcessingResult
+from app.models.telegram_models import TelegramMessage, TelegramUpdate
 from app.services.dedup_service import DedupService
 from app.services.ingestion_service import IngestionService
 from app.services.metadata_service import MetadataService
 from app.services.notion_service import NotionService
 from app.services.openai_service import OpenAIService
 from app.services.telegram_service import TelegramService
+from app.utils.telegram_filter import normalize_telegram_username
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +63,31 @@ class ReadingInboxApp:
             dedup=dedup,
         )
 
-    def _is_allowed_chat(self, chat_id: int) -> bool:
-        allowed = self.settings.app.telegram.allowed_chat_ids
-        return not allowed or chat_id in allowed
+    def _effective_allowed_chat_ids(self) -> set[int]:
+        return set(self.settings.secrets.TELEGRAM_ALLOWED_CHAT_IDS)
+
+    def _authorize_message(self, msg: TelegramMessage) -> tuple[bool, str]:
+        """Authorize a Telegram message before any expensive pipeline work."""
+
+        cfg = self.settings.app.telegram
+        if cfg.private_chat_only and msg.chat_type != "private":
+            return False, "non_private_chat"
+
+        allowed_chat_ids = self._effective_allowed_chat_ids()
+        if not allowed_chat_ids:
+            return False, "default_deny_no_allowlist"
+
+        if msg.chat_id in allowed_chat_ids:
+            return True, "allowed_chat_id"
+
+        return False, "not_in_allowed_chat_ids"
+
+    def _build_telegram_source(self, sender_username: str | None) -> str:
+        """Build Notion source label for Telegram input as telegram:username."""
+
+        normalized = normalize_telegram_username(sender_username or "")
+        username = normalized.lstrip("@") if normalized else "unknown"
+        return f"telegram:{username}"
 
     def process_input_text(
         self,
@@ -79,15 +103,47 @@ class ReadingInboxApp:
             telegram_message_id=telegram_message_id,
         )
 
-    def process_telegram_message(self, chat_id: int, message_id: int, text: str) -> None:
+    def process_telegram_message(
+        self,
+        chat_id: int,
+        message_id: int,
+        text: str,
+        sender_username: str | None,
+    ) -> None:
         """Process Telegram message via shared ingestion pipeline and reply."""
 
-        result = self.process_input_text(text=text, source="telegram", telegram_message_id=message_id)
+        source = self._build_telegram_source(sender_username)
+        result = self.process_input_text(text=text, source=source, telegram_message_id=message_id)
         if result.url_count == 0:
             return
 
         for item in result.item_results:
             self.telegram.send_message(chat_id=chat_id, text=item.message)
+
+    def _handle_updates_batch(self, updates: list[TelegramUpdate], last_update_id: int | None) -> tuple[int | None, int]:
+        """Handle polled updates while always advancing offsets, even when ignored."""
+
+        processed_count = 0
+        next_offset = last_update_id
+
+        for update in updates:
+            next_offset = update.update_id + 1
+            msg = update.message
+
+            authorized, reason = self._authorize_message(msg)
+            if not authorized:
+                # Unauthorized updates are consumed by offset, then discarded immediately.
+                continue
+
+            self.process_telegram_message(
+                chat_id=msg.chat_id,
+                message_id=msg.message_id,
+                text=msg.text,
+                sender_username=msg.sender_username,
+            )
+            processed_count += 1
+
+        return next_offset, processed_count
 
     def run_polling_forever(self) -> None:
         """Main polling loop for Telegram updates."""
@@ -102,15 +158,7 @@ class ReadingInboxApp:
         while True:
             try:
                 updates = self.telegram.poll_updates(offset=last_update_id, timeout=20)
-                processed_count = 0
-
-                for update in updates:
-                    last_update_id = update.update_id + 1
-                    msg = update.message
-                    if not self._is_allowed_chat(msg.chat_id):
-                        continue
-                    self.process_telegram_message(msg.chat_id, msg.message_id, msg.text)
-                    processed_count += 1
+                last_update_id, processed_count = self._handle_updates_batch(updates, last_update_id)
 
                 if processed_count > 0:
                     logger.info(

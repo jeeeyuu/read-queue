@@ -69,9 +69,12 @@ class TelegramService:
                 continue
 
             chat = message.get("chat") or {}
+            sender = message.get("from") or {}
             chat_id = chat.get("id")
+            chat_type = chat.get("type") or "private"
             message_id = message.get("message_id")
             update_id = raw.get("update_id")
+            sender_username = sender.get("username")
             if chat_id is None or message_id is None or update_id is None:
                 continue
 
@@ -81,7 +84,9 @@ class TelegramService:
                     message=TelegramMessage(
                         message_id=message_id,
                         chat_id=chat_id,
+                        chat_type=chat_type,
                         text=text,
+                        sender_username=sender_username,
                     ),
                 )
             )

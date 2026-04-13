@@ -10,7 +10,9 @@ class TelegramMessage(BaseModel):
 
     message_id: int
     chat_id: int
+    chat_type: str = "private"
     text: str
+    sender_username: str | None = None
 
 
 class TelegramUpdate(BaseModel):
