@@ -1,214 +1,181 @@
-# ReadQueue (Local-First)
+# ReadQueue (로컬 우선)
 
-## 1. Runtime Requirement (Linux/WSL First)
-ReadQueue is a Linux-based runtime application.
-- Linux: run polling and ingestion directly.
-- Windows: run the main runtime inside WSL.
-- Windows `.bat` launcher is only a trigger into WSL runtime (not a standalone Windows runtime).
+## 1. 런타임 요구사항 (Linux/WSL 우선)
+ReadQueue는 Linux 기반 런타임 앱입니다.
+- Linux: polling/ingestion을 직접 실행
+- Windows: 반드시 WSL 내부에서 메인 런타임 실행
+- Windows `.bat`는 WSL 런타임을 호출하는 트리거일 뿐, 독립 실행 런타임이 아닙니다.
 
-## 2. Project Overview
-ReadQueue ingests links from multiple inputs, enriches them, and stores them in Notion.
-Notion remains the primary UI for workflow management (Status, Read, Note, Tags).
-This project does not provide a desktop GUI or web frontend.
+## 2. 프로젝트 개요
+ReadQueue는 여러 입력 경로에서 링크를 받아 메타데이터/요약을 생성해 Notion에 저장합니다.
+워크플로우 UI는 Notion(상태, 읽음, 메모, 태그)입니다.
+데스크톱 GUI나 웹 프론트엔드는 제공하지 않습니다.
 
-## 3. Input Modes
-- Telegram bot input (polling mode)
-- One-click local clipboard input (Windows/macOS/Linux/WSL)
+## 3. 입력 모드
+- Telegram bot 입력 (polling)
+- 원클릭 로컬 클립보드 입력 (Windows/macOS/Linux/WSL)
 
-Both modes use the same shared ingestion pipeline:
-- URL extraction and normalization
-- Tracking parameter stripping
-- Duplicate detection
-- Metadata extraction
-- OpenAI Korean cleanup title + one-line summary
-- Non-link text extraction to Notion `Note`
-- Notion storage
+두 모드는 동일한 공용 ingestion 파이프라인을 사용합니다.
+- URL 추출/정규화
+- 트래킹 파라미터 제거
+- 중복 감지
+- 메타데이터 추출
+- OpenAI 한국어 제목 정리 + 1줄 요약
+- 비링크 텍스트를 Notion `Note`로 저장
+- Notion 기록
 
-## 4. Latest Behavior Updates
-- Robust multi-link processing:
-  - One input with multiple links creates separate Notion items per link.
-  - Processing order follows input order.
-  - Duplicate links inside the same single input are suppressed after first processing.
-- Shared note behavior:
-  - Non-link text from the same input is copied to `Note` for all links in that input.
-- Improved URL parsing:
-  - URLs containing parentheses like `.../Function_(mathematics)` are handled correctly.
-  - Wrapping punctuation (for example trailing `)` from surrounding text) is trimmed safely.
-- Metadata failure fallback:
-  - If page metadata extraction fails, ReadQueue can summarize the accompanying input text via OpenAI and still fill title/summary fields.
-- Duplicate note append:
-  - If a link already exists and new non-link text is sent with it, ReadQueue appends that text to existing `Note` on a new line.
-  - Existing `Note` content is not overwritten.
+## 4. 최근 동작
+- 다중 링크 안정 처리
+  - 한 메시지에 여러 링크가 있으면 링크별로 개별 Notion 아이템 생성
+  - 같은 입력 내 중복 링크는 첫 번째만 처리
+- 공통 메모 처리
+  - 같은 입력의 비링크 텍스트를 해당 입력의 모든 링크 `Note`에 공통 저장
+- URL 파싱 강화
+  - 괄호 포함 URL(`.../Function_(mathematics)`) 처리
+  - 문장부호 래핑 제거 개선
+- 메타데이터 실패 fallback
+  - 메타데이터 실패/빈약 시 입력 텍스트를 OpenAI로 요약해 제목/요약 필드 보완
+- 중복 링크 메모 append
+  - 이미 존재하는 링크에 텍스트가 함께 오면 기존 `Note` 뒤에 줄바꿈으로 추가(덮어쓰기 없음)
 
-## 5. Features
-- Telegram polling capture with robust multi-link support
-- Clipboard one-click send via generated launchers
-- Shared ingestion architecture across input paths
-- Notion duplicate prevention and status workflow
-- Structured logging + retry/backoff for transient API failures
+## 5. 기능
+- Telegram polling 수집 + 다중 링크 처리
+- 생성형 launcher를 통한 클립보드 원클릭 전송
+- 입력 경로 공통 파이프라인
+- Notion 중복 방지 + 상태 워크플로우
+- 구조화 로그 + retry/backoff
 
-## 6. Prerequisites
+## 6. 사전 준비
 - Python 3.11+
-- OpenAI API key
-- Notion integration token + Notion database
-- Telegram bot token (for Telegram mode)
-- WSL installed (if using Windows launcher)
+- OpenAI API 키
+- Notion integration token + Notion DB
+- Telegram bot token
+- Windows 사용 시 WSL 설치
 
-## 7. Setup
-1. Install dependencies:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -e .[dev]
-   ```
-2. Required config files:
-   - Copy `config/config.example.yaml` to `config/config.yaml`
-   - Copy `config/secrets.example.yaml` to `config/secrets.yaml`
-3. Fill in real tokens/IDs.
-4. Keep `config/secrets.yaml` out of git (already ignored by `.gitignore`).
+## 7. 설치
+1. 의존성 설치
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+```
+2. 필수 설정 파일 생성
+- `config/config.example.yaml` -> `config/config.yaml`
+- `config/secrets.example.yaml` -> `config/secrets.yaml`
+3. 실제 키/ID 입력
+4. `config/secrets.yaml`은 git에 커밋하지 않음(`.gitignore`에 이미 제외)
 
-## 8. Notion Setup
-1. Create Notion internal integration and copy API key.
-2. Create database and add required properties.
-3. Share database with integration using **Add connections**.
-4. Put database ID in `config/config.yaml`.
+## 8. Notion 설정
+1. Notion 내부 integration 생성 후 API 키 복사
+2. DB 생성 후 필수 속성 추가
+3. **Add connections**로 DB를 integration과 연결
+4. `config/config.yaml`에 DB ID 입력
 
-### Required Notion properties
+### 필수 Notion 속성
 
-| Property name | Type | Purpose |
+| 속성명 | 타입 | 용도 |
 |---|---|---|
-| Title | title | Main display title |
-| URL | url | Normalized original URL |
-| Canonical URL | url | Canonical URL if available |
-| Domain | rich_text | Host/domain |
-| Original Title | rich_text | Raw source title |
-| Cleaned Title KO | rich_text | OpenAI cleaned Korean title |
-| Summary One Line KO | rich_text | One-line Korean summary |
+| Title | title | 표시 제목 |
+| URL | url | 정규화 원본 URL |
+| Canonical URL | url | canonical URL |
+| Domain | rich_text | 도메인 |
+| Original Title | rich_text | 원문 제목 |
+| Cleaned Title KO | rich_text | 정리된 한국어 제목 |
+| Summary One Line KO | rich_text | 한국어 1줄 요약 |
 | Status | select | Inbox/Queued/Reading/Done/Archived/Failed |
-| Read | checkbox | Read state |
-| Note | rich_text | User note (including appended duplicate notes) |
-| Tags | multi_select | User tags |
-| Source | select | telegram/local/manual |
-| Saved At | date | Save timestamp |
-| Telegram Message ID | rich_text | Telegram message id when source is telegram |
-| Error Message | rich_text | Warning/failure details |
+| Read | checkbox | 읽음 상태 |
+| Note | rich_text | 사용자 메모(중복 append 포함) |
+| Tags | multi_select | 태그 |
+| Source | select | telegram:username / local / manual |
+| Saved At | date | 저장 시각 |
+| Telegram Message ID | rich_text | telegram 메시지 ID |
+| Error Message | rich_text | 경고/실패 사유 |
 
-## 9. Telegram Setup
-1. Create bot via `@BotFather`.
-2. Put token in `config/secrets.yaml`.
-3. Start chat with bot.
-4. Configure chat_id access control in `config/secrets.yaml`:
-   - `TELEGRAM_ALLOWED_CHAT_IDS`
-   - `TELEGRAM_DENIED_CHAT_IDS`
-5. Optional hardening: set `telegram.private_chat_only: true` to ignore non-private chats.
+## 9. Telegram 설정
+1. `@BotFather`로 bot 생성
+2. token을 `config/secrets.yaml`에 입력
+3. bot과 채팅 시작
+4. `config/secrets.yaml`에 chat_id 접근제어 설정
+- `TELEGRAM_ALLOWED_CHAT_IDS`
 
-Access-control behavior (checked before ingestion pipeline work):
-- Default deny: if allowlist is empty, Telegram updates are rejected.
-- Polling still consumes updates and advances offset even when unauthorized.
-- Unauthorized updates are discarded before URL extraction/metadata/OpenAI/Notion calls.
-- Unauthorized updates are consumed and discarded silently (no reply/action).
+접근제어 동작:
+- 기본 정책은 **default deny**
+- `TELEGRAM_ALLOWED_CHAT_IDS`가 비어 있으면 Telegram 입력은 전부 폐기
+- 허용되지 않은 업데이트는 오프셋만 소비하고 즉시 폐기(응답/후처리 없음)
+- 인가 전 단계에서 차단되므로 URL 추출/메타데이터/OpenAI/Notion 호출 없음
 
-Notion source behavior for authorized Telegram messages:
-- `Source` is stored as `telegram:username` (example: `telegram:alice`).
+인가된 Telegram 메시지의 Notion `Source`:
+- `telegram:username` 형식으로 저장 (예: `telegram:alice`)
 
-## 10. Local Clipboard Send
-Use internal script:
+## 10. 로컬 클립보드 전송
+내부 스크립트:
 ```bash
 python scripts/send_clipboard.py
 ```
 
-Clipboard backend behavior:
-- Windows native: `PowerShell Get-Clipboard`
+클립보드 백엔드:
+- Windows: `PowerShell Get-Clipboard`
 - WSL: `powershell.exe -NoProfile -Command Get-Clipboard`
 - macOS: `pbpaste`
 - Linux: `wl-paste` -> `xclip` -> `xsel`
 
-If clipboard is empty or backend is missing, script exits non-zero with a clear message.
+클립보드 비어 있음/백엔드 없음 시 non-zero 종료
 
-Input parsing behavior (applies to Telegram and clipboard):
-- If one input contains multiple links, each link is processed as a separate Notion item.
-- If the same link appears multiple times in one input, only the first is processed and the rest are marked duplicate.
-- Any non-link text in that same input is stored in the `Note` field for all links created from that input.
-- If a link is duplicate and non-link text exists, that text is appended to the existing Notion `Note` with a newline.
-
-## 11. Launcher Generation
-Generate wrappers from config:
+## 11. 런처 생성
 ```bash
 python scripts/generate_launchers.py
 ```
 
-Configured in `config/config.yaml`:
+`config/config.yaml` 주요 항목:
 - `launchers.windows_bat_output_path`
-- `launchers.windows_pause_on_exit` (keep .bat console open so you can read output/errors)
+- `launchers.windows_pause_on_exit`
 - `launchers.macos_command_output_path`
 - `linux_runtime.run_root`, `linux_runtime.python_bin`, `linux_runtime.use_venv`, `linux_runtime.venv_path`
 
-Regenerate launchers whenever runtime path or venv/python path changes.
+경로/venv 변경 시 런처 재생성 필요
 
-Windows path input guide (important when generating from WSL/Linux):
-- Recommended: set `launchers.windows_bat_output_path` to WSL style, e.g. `/mnt/c/Users/YOUR_NAME/Desktop/ReadQueue_SendClipboard.bat`.
-- You may also enter Windows style `C:/Users/...`; ReadQueue normalizes it to `/mnt/c/...` during generation.
-- If you previously generated with a non-normalized setup, an accidental repo-local path like `./C:/Users/...` may appear. Regenerate after fixing config and delete the mistaken folder if needed.
-
-## 12. Running
-### Telegram polling runtime (Linux/WSL)
+## 12. 실행
+### Telegram polling
 ```bash
 python scripts/run_polling.py
 ```
 
-### Windows clipboard workflow example
-1. Run runtime setup in WSL (venv + config).
-2. Generate launcher: `python scripts/generate_launchers.py`.
-3. Double-click generated `.bat`.
-4. `.bat` calls `wsl.exe` and runs runtime-side `scripts/send_clipboard.py`.
-5. If the console closes too quickly, set `launchers.windows_pause_on_exit: true` and regenerate launchers.
+### Windows 클립보드 예시
+1. WSL 런타임 환경 준비(venv/config)
+2. `python scripts/generate_launchers.py`
+3. 생성된 `.bat` 더블클릭
 
-### macOS clipboard workflow example
-1. Generate launcher.
-2. Double-click generated `.command`.
-3. It runs `scripts/send_clipboard.py` and exits after output.
+### macOS 클립보드 예시
+1. 런처 생성
+2. `.command` 더블클릭
 
-## 13. Polling Runtime Availability
-ReadQueue Telegram mode runs by polling.
-That means ingestion only continues while the polling process is alive.
+## 13. polling 가용성
+Telegram 모드는 polling 기반이므로 프로세스가 살아있는 동안만 동작합니다.
+- 로컬 PC를 계속 켜두고 `run_polling.py` 유지
+- 또는 항상 켜진 서버/VM에 배포
 
-In practice, you must choose one of these:
-- Keep your computer on and keep `scripts/run_polling.py` running.
-- Deploy runtime to an always-on server/host (for example Linux VM/cloud instance) and keep the process running there.
+중단되면 Telegram ingestion도 중단됩니다.
 
-If your machine sleeps/shuts down or process stops, Telegram ingestion stops until restarted.
+## 14. 트러블슈팅
+- launcher 경로 오류: `launchers.windows_bat_output_path` 수정 후 재생성
+- WSL 실행 불가: Windows에서 `wsl.exe` 동작 확인
+- clipboard 백엔드 없음: Linux는 wl-paste/xclip/xsel 설치
+- 런처가 잘못된 런타임을 가리킴: `linux_runtime.run_root` 확인 후 재생성
+- 런타임 준비 미완료: venv/config/dependency 재확인
+- Telegram이 계속 거절됨: `TELEGRAM_ALLOWED_CHAT_IDS` 값 확인
+- Notion/OpenAI 오류: 키/DB 공유/속성명 확인
 
-## 14. Troubleshooting
-- Windows launcher path misconfigured: fix `launchers.windows_bat_output_path` and regenerate.
-- Mistaken local path created as `./C:/Users/...`: this means the launcher path was interpreted locally in WSL; use `/mnt/c/Users/...` (or keep `C:/...` with normalization), regenerate, then remove the accidental `./C:` folder.
-- WSL unavailable: ensure `wsl.exe` works from Windows.
-- Clipboard backend missing: install/use supported backend (Linux: wl-paste/xclip/xsel).
-- Launcher points to wrong runtime: check `linux_runtime.run_root` and regenerate.
-- Runtime not set up in Linux/WSL: verify venv, config files, and dependencies.
-- Unauthorized sender unexpectedly blocked: verify `TELEGRAM_ALLOWED_CHAT_IDS`.
-- Group message ignored: check `telegram.private_chat_only` setting.
-- Notion/OpenAI errors: verify keys, Notion DB sharing, property names.
-- Metadata extraction failed often: check target site restrictions; ReadQueue will fallback to input-text summarization when possible.
-
-## 15. Tests
-Run:
+## 15. 테스트
 ```bash
 pytest
 ```
 
-Included coverage:
-- config validation
-- URL utilities (including parentheses/punctuation handling)
-- dedup strategy
-- shared ingestion source handling
-- clipboard backend selection
-- launcher rendering/generation
-- metadata-failure fallback summarization
-- duplicate-note append behavior
-
-## 16. Future Improvements
-- Telegram webhook mode
+## 16. 향후 개선
+- Telegram webhook 모드
 - richer article extraction
 - batch import
-- daily digest report
-- optional local retry cache
+- daily digest
+- optional local cache
+
+## English README
+영문 문서는 [README_english.md](README_english.md)에서 확인할 수 있습니다.
